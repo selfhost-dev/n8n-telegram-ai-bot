@@ -1,0 +1,393 @@
+{
+  "name": "AI Telegram bot (Gemini, HTTP) on Selfhost.dev",
+  "nodes": [
+    {
+      "parameters": {
+        "updates": [
+          "message"
+        ],
+        "additionalFields": {}
+      },
+      "name": "Telegram Trigger",
+      "type": "n8n-nodes-base.telegramTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        -704,
+        48
+      ],
+      "id": "b5fc8d66-f145-4cbc-a1a3-31b8b88a9220",
+      "webhookId": "f80d2870-97f9-44e3-a33a-585b4a438913",
+      "credentials": {
+        "telegramApi": {
+          "id": "wDpGHK3h5b2UAXTO",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "is-voice",
+              "leftValue": "={{ $json.message.voice ? 'yes' : 'no' }}",
+              "rightValue": "yes",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Is voice note?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        -480,
+        48
+      ],
+      "id": "19a37bb8-0f1d-4378-9818-1be17758abf0"
+    },
+    {
+      "parameters": {
+        "resource": "file",
+        "fileId": "={{ $json.message.voice.file_id }}",
+        "additionalFields": {}
+      },
+      "name": "Download voice file",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        -256,
+        -80
+      ],
+      "id": "720742e8-8273-4360-9037-6cc606ecfbd6",
+      "webhookId": "a632aa72-fad2-4b03-9155-d1e03f8575e9",
+      "credentials": {
+        "telegramApi": {
+          "id": "wDpGHK3h5b2UAXTO",
+          "name": "Telegram account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const bin = await this.helpers.getBinaryDataBuffer(0, 'data');\nreturn [{ json: { audio: bin.toString('base64'), mime: 'audio/ogg' } }];"
+      },
+      "name": "Voice to base64",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        -32,
+        -80
+      ],
+      "id": "c8bfcf3a-44cc-4123-bab4-062e20c2e9ef"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({ contents: [{ parts: [ { text: 'Transcribe this voice note exactly. Return only the transcript, nothing else.' }, { inline_data: { mime_type: $json.mime, data: $json.audio } } ] }] }) }}",
+        "options": {}
+      },
+      "name": "Gemini transcribe",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        192,
+        -80
+      ],
+      "id": "feea4bcd-f20a-40ac-a0a3-bca43b7a80aa",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wnj930w3GLwcwVO0",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "// Bot username without the @\nconst BOT = 'srushti_n8n_gemini_bot';\n\nconst m = $('Telegram Trigger').first().json.message;\nlet text = m.text || '';\nlet inputType = 'text';\n\nif (m.voice) {\n  const g = $input.first().json;\n  const parts = (g.candidates && g.candidates[0] && g.candidates[0].content && g.candidates[0].content.parts) || [];\n  text = parts.map(x => x.text || '').join('').trim();\n  inputType = 'voice';\n}\n\nconst isGroup = ['group', 'supergroup'].includes(m.chat.type);\nconst mentioned = text.toLowerCase().includes('@' + BOT.toLowerCase());\nconst repliedToBot = !!(m.reply_to_message && m.reply_to_message.from && m.reply_to_message.from.is_bot);\n\n// Private chat: always answer. Group: only when mentioned or replied to.\nconst shouldReply = !isGroup || mentioned || repliedToBot;\n\nreturn [{ json: {\n  chatId: m.chat.id,\n  text: text.replace(new RegExp('@' + BOT, 'ig'), '').trim(),\n  inputType,\n  isGroup,\n  shouldReply\n} }];"
+      },
+      "name": "Prepare message",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        416,
+        48
+      ],
+      "id": "6f25cd75-e1dc-456b-834b-a561b52a39f8"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "loose",
+            "version": 1
+          },
+          "conditions": [
+            {
+              "id": "should-reply",
+              "leftValue": "={{ $json.shouldReply }}",
+              "rightValue": "true",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            },
+            {
+              "id": "has-text",
+              "leftValue": "={{ $json.text }}",
+              "rightValue": "",
+              "operator": {
+                "type": "string",
+                "operation": "notEmpty"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "name": "Should I reply?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.2,
+      "position": [
+        624,
+        48
+      ],
+      "id": "77515432-8791-4e93-ab8f-c725b8539de2"
+    },
+    {
+      "parameters": {
+        "jsCode": "const p = $('Prepare message').first().json;\nconst data = $getWorkflowStaticData('global');\ndata.history = data.history || {};\nconst hist = data.history[String(p.chatId)] || [];\n\nlet contents = [...hist, { role: 'user', parts: [{ text: p.text }] }].slice(-6);\nwhile (contents.length > 1 && contents[0].role !== 'user') contents.shift();\n\nconst body = {\n  systemInstruction: { parts: [{ text: 'You are a friendly, concise assistant inside Telegram. Answer in the same language the user writes in. Keep replies under 120 words unless asked for more. If the message came from a voice note, answer naturally as if spoken to. Do not ask for or store private data.' }] },\n  contents\n};\n\nreturn [{ json: { chatId: p.chatId, userText: p.text, body } }];"
+      },
+      "name": "Build request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        848,
+        -32
+      ],
+      "id": "22a0a623-7ca5-4abd-b54d-63ae1f9cc44f"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-3.5-flash-lite:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.body) }}",
+        "options": {}
+      },
+      "name": "Gemini reply",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1072,
+        -32
+      ],
+      "id": "d1c5db7d-0d30-45b2-b5cd-4e10f899b73b",
+      "retryOnFail": true,
+      "maxTries": 5,
+      "waitBetweenTries": 3000,
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "wnj930w3GLwcwVO0",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $getWorkflowStaticData('global');\nconst p = $('Build request').first().json;\nconst parts = ($json.candidates && $json.candidates[0] && $json.candidates[0].content && $json.candidates[0].content.parts) || [];\nconst reply = parts.filter(x => !x.thought).map(x => x.text || '').join('').trim() || 'Sorry, I could not come up with an answer.';\n\nconst key = String(p.chatId);\ndata.history = data.history || {};\nconst hist = data.history[key] || [];\nhist.push({ role: 'user', parts: [{ text: p.userText }] });\nhist.push({ role: 'model', parts: [{ text: reply }] });\ndata.history[key] = hist.slice(-6);\n\nreturn [{ json: { chatId: p.chatId, reply } }];"
+      },
+      "name": "Save memory and format reply",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1296,
+        -32
+      ],
+      "id": "72e28d68-58f1-4a39-ab44-6e2699ee7628"
+    },
+    {
+      "parameters": {
+        "chatId": "={{ $json.chatId }}",
+        "text": "={{ $json.reply }}",
+        "additionalFields": {
+          "appendAttribution": false
+        }
+      },
+      "name": "Send reply",
+      "type": "n8n-nodes-base.telegram",
+      "typeVersion": 1.2,
+      "position": [
+        1504,
+        -32
+      ],
+      "id": "26f3f60c-f429-42ea-8a09-3bb3b3b11753",
+      "webhookId": "9519b535-8ea3-4b2d-aaa4-588d579b7246",
+      "credentials": {
+        "telegramApi": {
+          "id": "wDpGHK3h5b2UAXTO",
+          "name": "Telegram account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Telegram Trigger": {
+      "main": [
+        [
+          {
+            "node": "Is voice note?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is voice note?": {
+      "main": [
+        [
+          {
+            "node": "Download voice file",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Prepare message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download voice file": {
+      "main": [
+        [
+          {
+            "node": "Voice to base64",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Voice to base64": {
+      "main": [
+        [
+          {
+            "node": "Gemini transcribe",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini transcribe": {
+      "main": [
+        [
+          {
+            "node": "Prepare message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Prepare message": {
+      "main": [
+        [
+          {
+            "node": "Should I reply?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Should I reply?": {
+      "main": [
+        [
+          {
+            "node": "Build request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build request": {
+      "main": [
+        [
+          {
+            "node": "Gemini reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Gemini reply": {
+      "main": [
+        [
+          {
+            "node": "Save memory and format reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Save memory and format reply": {
+      "main": [
+        [
+          {
+            "node": "Send reply",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate",
+    "timeSavedMode": "fixed",
+    "saveDataErrorExecution": "all",
+    "saveDataSuccessExecution": "all",
+    "callerPolicy": "workflowsFromSameOwner",
+    "availableInMCP": false
+  },
+  "versionId": "3f0ed5df-38f7-4844-851f-9b000f9e0342",
+  "meta": {
+    "instanceId": "136c743f7f93ee39e1f7ef7615051853c175d0e9e0d010c01964f440c9e5b154"
+  },
+  "nodeGroups": [],
+  "id": "ffimdkOnDHXsYg7b",
+  "tags": []
+}
