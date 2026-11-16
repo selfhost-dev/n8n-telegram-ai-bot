@@ -1,5 +1,7 @@
 # Telegram Gemini n8n Bot
 
+Full write-up with every step and error we hit: https://selfhost.dev/blog/n8n-telegram-bot/
+
 An AI assistant for Telegram built as a single n8n workflow. It answers text messages and voice notes using Google Gemini, remembers earlier messages in a chat, and behaves sensibly in groups by replying only when it is addressed.
 
 - **Platform:** n8n, self-hosted on Selfhost.dev
